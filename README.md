@@ -70,15 +70,31 @@ options (`postgresUser`, `postgresDb`, persistence size, etc).
 kubectl get secret postgres-credentials -n postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
 ```
 
-### Getting the TLS CA cert
+### Getting the TLS certs
 
 The self-signed CA cert is baked into the image at `/certs/ca.crt` (same cert across pod restarts - it's part of
-the image, not regenerated per-pod; a new one is only generated when the image itself is rebuilt). Pull it out of
-a running pod:
+the image, not regenerated per-pod; a new one is only generated when the image itself is rebuilt). The chart
+doesn't create a Secret for it automatically, so after installing, pull the certs out of the running pod once and
+store them as a Secret for easy retrieval later (re-run this if you roll out a new image with a regenerated cert):
 
 ```bash
 POD_NAME=$(kubectl get pods -n postgres -l "app.kubernetes.io/name=postgres,app.kubernetes.io/instance=postgres" -o jsonpath="{.items[0].metadata.name}")
-kubectl exec -n postgres $POD_NAME -- cat /certs/ca.crt > ca.crt
+TMPDIR=$(mktemp -d)
+kubectl exec -n postgres $POD_NAME -- cat /certs/ca.crt > "$TMPDIR/ca.crt"
+kubectl exec -n postgres $POD_NAME -- cat /certs/server.crt > "$TMPDIR/server.crt"
+kubectl exec -n postgres $POD_NAME -- cat /certs/server.key > "$TMPDIR/server.key"
+
+kubectl create secret generic postgres-tls-certs -n postgres \
+  --from-file=ca.crt="$TMPDIR/ca.crt" \
+  --from-file=server.crt="$TMPDIR/server.crt" \
+  --from-file=server.key="$TMPDIR/server.key"
+rm -rf "$TMPDIR"
+```
+
+Retrieve the CA cert later without touching the pod:
+
+```bash
+kubectl get secret postgres-tls-certs -n postgres -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
 ```
 
 Then connect from any client:
