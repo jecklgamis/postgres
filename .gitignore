@@ -1,0 +1,4 @@
+.idea/
+*.tgz
+dry-run.txt
+ca.crt

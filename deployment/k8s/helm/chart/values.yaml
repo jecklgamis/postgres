@@ -1,0 +1,93 @@
+# Default values for postgres.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Single instance only - this chart has no replication/HA. Keep
+# replicaCount at 1; the persistent volume isn't safe to share across
+# replicas and there's no coordination between them.
+replicaCount: 1
+
+image:
+  repository: jecklgamis/postgres
+  # image.tag defaults to a mutable tag ("main"), so IfNotPresent would let a
+  # node keep serving a stale cached image after a new push under the same
+  # tag - use a pinned/immutable tag (e.g. a commit SHA) if you want to go
+  # back to IfNotPresent.
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "main"
+
+# jecklgamis/postgres is a public image; only set this if you're pointing
+# image.repository at a private registry/fork.
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Superuser account created on first init. postgresUser/postgresDb are not
+# sensitive and live in values.yaml; postgresPassword gates every command
+# over the TLS listener. Defaults to "changeme" so this works out of the
+# box but MUST be overridden for anything beyond a quick trial. Set
+# existingSecretName instead to source it from a Secret you manage
+# yourself (must contain a data/stringData key named POSTGRES_PASSWORD)
+# without putting it in values.yaml/git.
+postgresUser: "postgres"
+postgresDb: "postgres"
+postgresPassword: "changeme"
+existingSecretName: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # Set fsGroup so the mounted volume is writable by the container's
+  # non-root "postgres" user on first mount.
+  # fsGroup: 999
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 999
+
+service:
+  type: ClusterIP
+  port: 5432
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 500m
+  #   memory: 512Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# Backed by PGDATA (a subdirectory of this mount, set in the image) so data
+# lands on this volume instead of the container's ephemeral filesystem.
+# Enabled by default since a Postgres instance losing all data on pod
+# restart/reschedule defeats the point; disable only for disposable/CI use.
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
