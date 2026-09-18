@@ -3,12 +3,23 @@ RUN apk add --no-cache openssl
 
 # Self-signed CA + server cert for TLS. Fine for local/dev use - replace
 # with certs from a real CA before running this anywhere untrusted.
+#
+# The CA cert needs basicConstraints/keyUsage v3 extensions - OpenSSL 3.x
+# (and Python's ssl module) reject a CA with no keyUsage as untrusted for
+# chain verification ("CA cert does not include key usage extension").
+# The server cert gets a subjectAltName too, since modern TLS clients
+# ignore the CN for hostname matching (RFC 6125) - DNS:postgres covers
+# in-cluster Service DNS names (postgres, postgres.<namespace>, ...).
 RUN mkdir -p /certs && cd /certs && \
     openssl genrsa -out ca.key 4096 && \
-    openssl req -x509 -new -nodes -sha256 -days 3650 -key ca.key -out ca.crt -subj "/CN=postgres-dev-ca" && \
+    openssl req -x509 -new -nodes -sha256 -days 3650 -key ca.key -out ca.crt -subj "/CN=postgres-dev-ca" \
+      -addext "basicConstraints=critical,CA:TRUE" \
+      -addext "keyUsage=critical,keyCertSign,cRLSign" && \
     openssl genrsa -out server.key 2048 && \
-    openssl req -new -sha256 -key server.key -out server.csr -subj "/CN=postgres" && \
-    openssl x509 -req -sha256 -days 3650 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt && \
+    openssl req -new -sha256 -key server.key -out server.csr -subj "/CN=postgres" \
+      -addext "subjectAltName=DNS:postgres,DNS:localhost,IP:127.0.0.1" && \
+    openssl x509 -req -sha256 -days 3650 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt \
+      -copy_extensions copy && \
     rm -f server.csr ca.key ca.srl && \
     chmod 600 server.key
 
